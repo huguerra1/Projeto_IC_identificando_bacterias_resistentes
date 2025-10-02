@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<?xml-stylesheet type="text/xsl" href="491_240506-160846.xsl"?>
+<properties>
+	<header>
+		<key field="sample name" readonly="1">491_240506-160846</key>
+		<key field="sensor type" readonly="1">SWIR SpeCam</key>
+		<key field="sensor id" readonly="1">410025</key>
+		<key field="serial number" readonly="1">410025</key>
+		<key field="samples" readonly="1">320</key>
+		<key field="spectral sampling" readonly="1">256</key>
+		<key field="spectral binning" readonly="1">1</key>
+		<key field="spatial binning" readonly="1">1</key>
+		<key field="frame rate" readonly="1">100.00</key>
+		<key field="integration time" readonly="1">4.5000</key>
+		<key field="NUC" readonly="1">0</key>
+		<key field="data format" readonly="1">BIL</key>
+		<key field="frames recorded" readonly="1">291</key>
+		<key field="frames dropped" readonly="1">0</key>
+		<key field="active bands" readonly="1">256</key>
+		<key field="default bands" readonly="1">{ 121, 159, 92 }</key>
+		<key field="bits per pixels" readonly="1">12</key>
+		<key field="date" readonly="1">2024-05-06</key>
+		<key field="date text" readonly="1">Monday, May 06, 2024</key>
+		<key field="time" readonly="1">16:08:46</key>
+		<key field="error" readonly="1">none</key>
+	</header>
+	<userdefined>
+		<key field="operator" readonly="0">Arlindo Galvão</key>
+		<key field="sample type" readonly="0">491</key>
+		<key field="description" readonly="0">491</key>
+	</userdefined>
+</properties>

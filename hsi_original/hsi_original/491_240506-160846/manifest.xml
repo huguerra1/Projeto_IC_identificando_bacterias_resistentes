@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<Manifest>
+		<File Type="capture" Extension="hdr">capture/491_240506-160846.hdr</File>
+		<File Type="capture" Extension="raw">capture/491_240506-160846.raw</File>
+		<File Type="darkref" Extension="hdr">capture/DARKREF_491_240506-160846.hdr</File>
+		<File Type="darkref" Extension="raw">capture/DARKREF_491_240506-160846.raw</File>
+		<File Type="whiteref" Extension="hdr">capture/WHITEREF_491_240506-160846.hdr</File>
+		<File Type="whiteref" Extension="raw">capture/WHITEREF_491_240506-160846.raw</File>
+		<File Type="properties" Extension="xml">metadata/491_240506-160846.xml</File>
+		<File Type="properties" Extension="xsl">metadata/491_240506-160846.xsl</File>
+</Manifest>

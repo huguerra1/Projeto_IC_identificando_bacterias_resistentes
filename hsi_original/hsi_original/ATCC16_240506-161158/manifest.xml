@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<Manifest>
+		<File Type="capture" Extension="hdr">capture/ATCC16_240506-161158.hdr</File>
+		<File Type="capture" Extension="raw">capture/ATCC16_240506-161158.raw</File>
+		<File Type="darkref" Extension="hdr">capture/DARKREF_ATCC16_240506-161158.hdr</File>
+		<File Type="darkref" Extension="raw">capture/DARKREF_ATCC16_240506-161158.raw</File>
+		<File Type="whiteref" Extension="hdr">capture/WHITEREF_ATCC16_240506-161158.hdr</File>
+		<File Type="whiteref" Extension="raw">capture/WHITEREF_ATCC16_240506-161158.raw</File>
+		<File Type="properties" Extension="xml">metadata/ATCC16_240506-161158.xml</File>
+		<File Type="properties" Extension="xsl">metadata/ATCC16_240506-161158.xsl</File>
+</Manifest>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<Manifest>
+		<File Type="capture" Extension="hdr">capture/ATCC13_240506-161053.hdr</File>
+		<File Type="capture" Extension="raw">capture/ATCC13_240506-161053.raw</File>
+		<File Type="darkref" Extension="hdr">capture/DARKREF_ATCC13_240506-161053.hdr</File>
+		<File Type="darkref" Extension="raw">capture/DARKREF_ATCC13_240506-161053.raw</File>
+		<File Type="whiteref" Extension="hdr">capture/WHITEREF_ATCC13_240506-161053.hdr</File>
+		<File Type="whiteref" Extension="raw">capture/WHITEREF_ATCC13_240506-161053.raw</File>
+		<File Type="properties" Extension="xml">metadata/ATCC13_240506-161053.xml</File>
+		<File Type="properties" Extension="xsl">metadata/ATCC13_240506-161053.xsl</File>
+</Manifest>
