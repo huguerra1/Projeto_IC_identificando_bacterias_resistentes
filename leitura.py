@@ -1,36 +1,30 @@
 import numpy as np
 import spectral as sp
+import cv2  # Biblioteca do PDF
 from pathlib import Path
+from tqdm import tqdm
+import warnings
+
+# --- Configurações para suprimir avisos ---
+sp.settings.envi_support_nonlowercase_params = True
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # =============================================================================
-# CONFIGURAÇÃO (🚨 EDITAR ESTA SEÇÃO)
+# CONFIGURAÇÃO
 # =============================================================================
 
-# 1. Defina o caminho para a pasta que contém a sua amostra
-DATA_PATH = Path('C:/Users/hugo/OneDrive/identificacao_bacteria/amostras_teste')
-# 2. Defina onde o arquivo de saída será salvo
-SAVE_PATH = Path('./matrizes_salvas')
-SAVE_PATH.mkdir(exist_ok=True) # Cria a pasta se ela não existir
-
-# 3. Informações da amostra que você quer processar
-amostra_info = {
-    "nome": "351_1_240506-160920/capture",
-    "arquivos": {
-        "raw": "351_1_240506-160920.raw",
-        "dark": "DARKREF_351_1_240506-160920.raw",
-        "white": "WHITEREF_351_1_240506-160920.raw"
-    },
-    "roi_coords": {
-        "centro": (100, 150),
-        "raio": 45
-    }
-}
+DATA_PATH = Path('C:/Users/hugo/OneDrive/identificacao_bacteria/hsi_original/hsi_original')
+SAVE_PATH = Path('./matrizes_salvas_BATOQUE')
+DEBUG_PATH = Path('./debug_imagens_falhas') # <-- NOVO: Pasta para salvar imagens de debug
+SAVE_PATH.mkdir(exist_ok=True)
+DEBUG_PATH.mkdir(exist_ok=True)
 
 # =============================================================================
-# FUNÇÕES AUXILIARES (NÃO PRECISA EDITAR)
+# FUNÇÕES AUXILIARES
 # =============================================================================
 
 def carregar_cubo_envi(pasta_amostra, nome_arquivo):
+    """Carrega um arquivo ENVI e retorna como um array numpy."""
     caminho_raw = pasta_amostra / nome_arquivo
     caminho_hdr = caminho_raw.with_suffix('.hdr')
     if not caminho_hdr.exists():
@@ -39,6 +33,7 @@ def carregar_cubo_envi(pasta_amostra, nome_arquivo):
     return img.load()
 
 def calibrar_para_refletancia(raw_cube, dark_cube, white_cube):
+    """Converte dados brutos (DN) para refletância."""
     mean_dark = np.mean(dark_cube, axis=(0, 1))
     mean_white = np.mean(white_cube, axis=(0, 1))
     denominator = mean_white - mean_dark
@@ -46,47 +41,120 @@ def calibrar_para_refletancia(raw_cube, dark_cube, white_cube):
     reflectance_cube = (raw_cube - mean_dark) / denominator
     return np.clip(reflectance_cube, 0, 1)
 
-def extrair_espectros_roi(reflectance_cube, roi_coords):
-    centro = roi_coords["centro"]
-    raio = roi_coords["raio"]
-    altura, largura, _ = reflectance_cube.shape
-    y_indices, x_indices = np.ogrid[:altura, :largura]
-    dist_do_centro = np.sqrt((y_indices - centro[0])**2 + (x_indices - centro[1])**2)
-    mask = dist_do_centro <= raio
-    roi_pixels = reflectance_cube[mask]
-    if roi_pixels.size == 0:
-        raise ValueError(f"Coordenadas da ROI circular não encontraram pixels.")
-    return roi_pixels
+def get_rgb(cubo_hsi, bands):
+    """Cria uma imagem RGB (como um array NumPy) a partir de um cubo HSI."""
+    rgb = cubo_hsi[..., bands].copy()
+    for i in range(3):
+        banda = rgb[..., i]
+        min_val = np.min(banda)
+        max_val = np.max(banda)
+        if (max_val - min_val) > 0:
+            rgb[..., i] = (banda - min_val) / (max_val - min_val)
+        else:
+            rgb[..., i] = 0
+    return rgb
+
+# --- FUNÇÃO PRINCIPAL CORRIGIDA (com CLAHE para Contraste) ---
+def encontrar_batoque_hough(cubo_hsi, nome_amostra_base):
+    """
+    Encontra o batoque circular usando a Transformada de Hough.
+    Usa bandas dinâmicas, salva imagem de debug e aplica CLAHE para contraste.
+    """
+    
+    # --- Usa bandas dinâmicas ---
+    num_bands = cubo_hsi.shape[2]
+    band_r = int(num_bands * 0.75)
+    band_g = int(num_bands * 0.50)
+    band_b = int(num_bands * 0.25)
+    rgb_bands = [band_r, band_g, band_b]
+    
+    print(f"   ...usando bandas DINÂMICAS {rgb_bands} para gerar imagem RGB sintética...")
+    
+    # 1. Geração de imagem RGB sintética
+    rgb = get_rgb(cubo_hsi, rgb_bands) 
+    
+    # Converte para escala de cinza 8-bit para o OpenCV
+    gray = cv2.cvtColor((rgb * 255).astype(np.uint8), cv2.COLOR_RGB2GRAY)
+    
+    # Suavização para reduzir ruído (ainda importante)
+    gray_blurred = cv2.GaussianBlur(gray, (7, 7), 2)
+    
+    # Aumento de Contraste com CLAHE ---
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    gray_contrasted = clahe.apply(gray_blurred)
+    
+    # 2. Segmentação automática com Transformada de Hough
+    # Usando a imagem com contraste melhorado e param2=30
+    circles = cv2.HoughCircles(gray_contrasted, cv2.HOUGH_GRADIENT, 1.2, 100,
+                               param1=100, param2=30, 
+                               minRadius=50, maxRadius=200) 
+
+    if circles is None:
+        # Salva a imagem COM CONTRASTE que falhou
+        debug_file_path = DEBUG_PATH / f"FALHA_CLAHE_{nome_amostra_base}_gray.png"
+        cv2.imwrite(str(debug_file_path), gray_contrasted) # Salva a imagem processada pelo CLAHE
+        # Levanta o erro informando sobre o arquivo de debug
+        raise ValueError(f"Nenhum círculo detectado (param2=30, ). Imagem de debug salva em: {debug_file_path}")
+        
+    # 3. Criação de máscara binária
+    mask = np.zeros(gray.shape, dtype=np.uint8)
+    x, y, r = circles[0][0]
+    cv2.circle(mask, (int(x), int(y)), int(r), 1, thickness=-1)
+    
+    return mask, (int(x), int(y), int(r))
 
 # =============================================================================
 # EXECUÇÃO PRINCIPAL
 # =============================================================================
 if __name__ == "__main__":
-    try:
-        print(f"Carregando dados da amostra: '{amostra_info['nome']}'...")
-        pasta_amostra = DATA_PATH / amostra_info["nome"]
-        
-        raw_cube = carregar_cubo_envi(pasta_amostra, amostra_info["arquivos"]["raw"])
-        dark_cube = carregar_cubo_envi(pasta_amostra, amostra_info["arquivos"]["dark"])
-        white_cube = carregar_cubo_envi(pasta_amostra, amostra_info["arquivos"]["white"])
-        
-        reflectance_cube = calibrar_para_refletancia(raw_cube, dark_cube, white_cube)
-        matriz_pixels_roi = extrair_espectros_roi(reflectance_cube, amostra_info["roi_coords"])
-        matriz_bandas_pixels = matriz_pixels_roi.T
-        
-        print(f"Matriz reorganizada criada com formato (bandas, pixels): {matriz_bandas_pixels.shape}")
+    print("Iniciando pipeline de processamento automático (com Hough/Batoque e Debug)...")
+    
+    pastas_para_processar = [p for p in DATA_PATH.iterdir() if p.is_dir()]
+    print(f"Encontradas {len(pastas_para_processar)} pastas de amostras para processar.")
 
-        # --- ETAPA DE SALVAMENTO ---
-        nome_base = Path(amostra_info["arquivos"]["raw"]).stem
-        nome_arquivo_saida = f'matriz_bruta_{nome_base}.npy'
-        caminho_arquivo_saida = SAVE_PATH / nome_arquivo_saida
+    for pasta_amostra in tqdm(pastas_para_processar, desc="Processando Amostras"):
+        nome_amostra_base = pasta_amostra.name
         
-        np.save(caminho_arquivo_saida, matriz_bandas_pixels)
-        
-        print("\n" + "="*50)
-        print("✅ MATRIZ SALVA COM SUCESSO!")
-        print(f"   Localização: {caminho_arquivo_saida}")
-        print("="*50)
+        try:
+            print(f"\nCarregando dados da amostra: '{nome_amostra_base}'...")
+            
+            pasta_capture = pasta_amostra / "capture"
+            arquivos = {
+                "raw": f"{nome_amostra_base}.raw",
+                "dark": f"DARKREF_{nome_amostra_base}.raw",
+                "white": f"WHITEREF_{nome_amostra_base}.raw"
+            }
+            
+            # --- Carrega e Calibra ---
+            raw_cube = carregar_cubo_envi(pasta_capture, arquivos["raw"])
+            dark_cube = carregar_cubo_envi(pasta_capture, arquivos["dark"])
+            white_cube = carregar_cubo_envi(pasta_capture, arquivos["white"])
+            reflectance_cube = calibrar_para_refletancia(raw_cube, dark_cube, white_cube)
+            
+            # --- ETAPA DE DETECÇÃO AUTOMÁTICA (DO PDF) ---
+            print("   Detectando batoque com Transformada de Hough...")
+            # Passa o nome da amostra para a função de debug
+            mask_2d, (x, y, r) = encontrar_batoque_hough(reflectance_cube, nome_amostra_base)
+            print(f"   Batoque encontrado em (x={x}, y={y}) com raio={r}")
+            
+            # 4. Aplicação da máscara e Recorte da ROI
+            mask_3d = np.repeat(mask_2d[:, :, np.newaxis], reflectance_cube.shape[2], axis=2)
+            matriz_pixels_roi = reflectance_cube[mask_2d == 1]
+            matriz_bandas_pixels = matriz_pixels_roi.T 
+            
+            print(f"Matriz reorganizada (Batoque) criada com formato (bandas, pixels): {matriz_bandas_pixels.shape}")
 
-    except (FileNotFoundError, ValueError) as e:
-        print(f"\n❌ ERRO: {e}")
+            # --- ETAPA DE SALVAMENTO ---
+            nome_arquivo_saida = f'matriz_bruta_BATOQUE_{nome_amostra_base}.npy'
+            caminho_arquivo_saida = SAVE_PATH / nome_arquivo_saida
+            np.save(caminho_arquivo_saida, matriz_bandas_pixels)
+            
+            print(f"✅ MATRIZ SALVA COM SUCESSO! Local: {caminho_arquivo_saida}")
+
+        except (FileNotFoundError, ValueError, TypeError) as e:
+            # O erro agora conterá a informação do arquivo de debug
+            print(f"\n❌ ERRO ao processar '{nome_amostra_base}': {e}. Pulando esta amostra.")
+    
+    print("\n" + "="*50)
+    print("Processamento de todas as amostras concluído!")
+    print("="*50)
