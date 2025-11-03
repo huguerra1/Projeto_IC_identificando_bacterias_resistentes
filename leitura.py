@@ -15,9 +15,12 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 DATA_PATH = Path('C:/Users/hugo/OneDrive/identificacao_bacteria/hsi_original/hsi_original')
 SAVE_PATH = Path('./matrizes_salvas_BATOQUE')
-DEBUG_PATH = Path('./debug_imagens_falhas') # <-- NOVO: Pasta para salvar imagens de debug
+DEBUG_PATH = Path('./debug_imagens_falhas') # Pasta para imagens de FALHA
+SAVE_PATH_VISUALS = Path('./salvas_visuais_batoque') # <-- NOVO: Pasta para imagens de SUCESSO
+
 SAVE_PATH.mkdir(exist_ok=True)
 DEBUG_PATH.mkdir(exist_ok=True)
+SAVE_PATH_VISUALS.mkdir(exist_ok=True) # <-- NOVO: Cria a pasta
 
 # =============================================================================
 # FUNÇÕES AUXILIARES
@@ -54,7 +57,7 @@ def get_rgb(cubo_hsi, bands):
             rgb[..., i] = 0
     return rgb
 
-# --- FUNÇÃO PRINCIPAL CORRIGIDA (com CLAHE para Contraste) ---
+
 def encontrar_batoque_hough(cubo_hsi, nome_amostra_base):
     """
     Encontra o batoque circular usando a Transformada de Hough.
@@ -84,9 +87,8 @@ def encontrar_batoque_hough(cubo_hsi, nome_amostra_base):
     gray_contrasted = clahe.apply(gray_blurred)
     
     # 2. Segmentação automática com Transformada de Hough
-    # Usando a imagem com contraste melhorado e param2=30
     circles = cv2.HoughCircles(gray_contrasted, cv2.HOUGH_GRADIENT, 1.2, 100,
-                               param1=100, param2=30, 
+                               param1=100, param2=15, 
                                minRadius=50, maxRadius=200) 
 
     if circles is None:
@@ -94,11 +96,29 @@ def encontrar_batoque_hough(cubo_hsi, nome_amostra_base):
         debug_file_path = DEBUG_PATH / f"FALHA_CLAHE_{nome_amostra_base}_gray.png"
         cv2.imwrite(str(debug_file_path), gray_contrasted) # Salva a imagem processada pelo CLAHE
         # Levanta o erro informando sobre o arquivo de debug
-        raise ValueError(f"Nenhum círculo detectado (param2=30, ). Imagem de debug salva em: {debug_file_path}")
+        raise ValueError(f"Nenhum círculo detectado (param2=15). Imagem de debug salva em: {debug_file_path}")
         
     # 3. Criação de máscara binária
     mask = np.zeros(gray.shape, dtype=np.uint8)
     x, y, r = circles[0][0]
+    
+    # --- NOVO: SALVAR IMAGEM DE VISUALIZAÇÃO (APÓS SUCESSO) ---
+    try:
+        # Converte a imagem RGB (float 0-1) para BGR (uint8 0-255) para o OpenCV
+        rgb_uint8 = (rgb * 255).astype(np.uint8)
+        bgr_uint8_para_desenho = cv2.cvtColor(rgb_uint8, cv2.COLOR_RGB2BGR)
+        
+        # Desenha o círculo (verde, com espessura 2)
+        cv2.circle(bgr_uint8_para_desenho, (int(x), int(y)), int(r), (0, 255, 0), 2)
+        
+        # Salva a imagem
+        save_name = SAVE_PATH_VISUALS / f"DETECTADO_{nome_amostra_base}.png"
+        cv2.imwrite(str(save_name), bgr_uint8_para_desenho)
+        print(f"   ...Visualização do círculo salva em: {save_name}")
+    except Exception as e:
+        print(f"   AVISO: Falha ao salvar imagem de visualização: {e}")
+    # --- FIM DA NOVA SEÇÃO ---
+
     cv2.circle(mask, (int(x), int(y)), int(r), 1, thickness=-1)
     
     return mask, (int(x), int(y), int(r))
